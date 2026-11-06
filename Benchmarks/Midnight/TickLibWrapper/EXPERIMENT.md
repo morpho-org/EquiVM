@@ -77,6 +77,12 @@ inputs in `[-maxInput, maxInput)` give nondecreasing `uint256` results on the St
 Combined with this certificate, the property holds at bytecode level for all
 `x ≠ -2^255` (the spec's require only affects that single divergent input).
 
+Construction cost (measured): a fresh agent re-derived `Eval.lean` (spec↔model
+`ExecFuncBody` correspondence, ~630 lines) + `Mono.lean` from scratch — given
+`Spec.lean`/`Model.lean` and the framework — in **~31 min**. The first-pass
+construction took roughly the same order (~30–60 min wall clock) plus a one-time
+framework-learning cost (how `ExecFuncBody`/internal calls/`ABlock` work).
+
 Re-check cost: **~13 s** for the four files cold (`Examples.WExp.Spec` 6.1 s,
 `Proofs.WExp.Model` 1.6 s, `Proofs.WExp.Eval` 3.8 s, `Proofs.WExp.Mono` 1.2 s —
 cached dependencies), vs **~61 s** for a cold build of the full bytecode-level
@@ -94,7 +100,7 @@ already paid.
 | Scaffold (artifact, spec, codegen) | ~20 min |
 | 3 constant getters + constructor | ~20 min |
 | `WExp.lean` (~2,200 lines) | ~5 h — Int↔UInt256 bridge layer, Stele `ExecFuncBody` for all three branches, StackOverflow induction |
-| Spec-level monotonicity (`Proofs/WExp`, done earlier) | ~13 s re-check — 4 files, pure `Int` arithmetic |
+| Spec-level monotonicity (`Proofs/WExp`) | ~31 min to prove (measured by fresh re-derivation), ~13 s re-check — 4 files, pure `Int` arithmetic |
 | `TickToPrice.lean` (~1,400 lines) | ~3.5 h |
 | `PriceToTick.lean` (~2,700 lines) | ~1.5 h — `RD`-loop + `execWhile` induction, plus a Lean `omega` stack-overflow bisection |
 

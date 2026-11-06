@@ -1,44 +1,47 @@
 import Proofs.WExp.Eval
 
 /-!
-# `wExp` monotonicity at the spec level
+# `wExp` monotonicity on the Stele spec
 
-The Stele counterpart of the `wExpIsMonotonicOnNegativeRange`,
-`wExpIsMonotonicOnPositiveRangeWhenQStays`, and `wExpIsMonotonicOnPositiveRangeWhenQJumps`
-rules from `certora/specs/TickToPrice.spec` (morpho midnight): for every pair of spec
-executions of `wExp` on consecutive inputs in `[-maxInput, maxInput)`, the returned
-`uint256` values are nondecreasing.
+`wExp_step_spec` / `wExpExternal_step_spec`: any two spec executions of the internal
+`wExp` body (resp. the external `wExp` transition) on consecutive inputs
+`x, x + 1` with `x ∈ [-MAXINPUT, MAXINPUT)` return nondecreasing `uint256` values.
+
+These lift the model-level `specWExp_step` through the `Eval.lean` correspondence:
+`wExp_result`/`wExpExternal_result` pin every derivation's returned value to the model,
+so the spec-level steps inherit the model's arithmetic monotonicity.
 -/
 
 open Stele ABI
 
 namespace WExp
 
-/-- Internal `wExp`: every pair of derivations on consecutive inputs returns nondecreasing
-    values. -/
-theorem wExp_step_spec {x : Int} (hlo : -MAXINPUT ≤ x) (hhi : x < MAXINPUT)
-    {s0 s1 f0 f1 : Frame} {e0 e0' e1 e1' : EVM.State} {v0 v1 : List Value}
-    (hx0 : s0.locals.get? "x" = some (.int x)) (hc0 : s0.contract = wexpContract)
-    (hx1 : s1.locals.get? "x" = some (.int (x + 1))) (hc1 : s1.contract = wexpContract)
-    (h0 : ExecFuncBody wexpConfig s0 e0 wExpFunction.body (.returned f0 e0' (some v0)))
-    (h1 : ExecFuncBody wexpConfig s1 e1 wExpFunction.body (.returned f1 e1' (some v1))) :
-    ∃ a b : Int, v0 = [.int a] ∧ v1 = [.int b] ∧ a ≤ b := by
-  obtain ⟨_, _, r0⟩ := wExp_result hlo (by omega) hx0 hc0 h0
-  obtain ⟨_, _, r1⟩ := wExp_result (by omega) (by omega) hx1 hc1 h1
-  cases r0; cases r1
-  exact ⟨_, _, rfl, rfl, specWExp_step hlo hhi⟩
+/-- Consecutive inputs on `[-MAXINPUT, MAXINPUT)` give nondecreasing `wExp` results. -/
+theorem wExp_step_spec {cfg : Config} {stele₁ stele₂ stele₁' stele₂' : Frame}
+    {evm evm₁' evm₂' : EVM.State} {x : Int} {v₁ v₂ : Value}
+    (hc₁ : stele₁.contract = wexpContract) (hx₁ : stele₁.locals.get? "x" = some (.int x))
+    (hc₂ : stele₂.contract = wexpContract) (hx₂ : stele₂.locals.get? "x" = some (.int (x + 1)))
+    (hlo : -MAXINPUT ≤ x) (hhi : x < MAXINPUT)
+    (h₁ : ExecFuncBody cfg stele₁ evm wExpFunction.body (.returned stele₁' evm₁' (some [v₁])))
+    (h₂ : ExecFuncBody cfg stele₂ evm wExpFunction.body (.returned stele₂' evm₂' (some [v₂]))) :
+    ∃ i j, v₁ = .int i ∧ v₂ = .int j ∧ i ≤ j := by
+  obtain ⟨_, _, h₁⟩ := wExp_result hc₁ hx₁ hlo (Int.le_of_lt hhi) h₁
+  obtain ⟨_, _, h₂⟩ := wExp_result hc₂ hx₂ (by omega) (by omega) h₂
+  cases h₁; cases h₂
+  exact ⟨specWExp x, specWExp (x + 1), rfl, rfl, specWExp_step hlo hhi⟩
 
-/-- External `wExp` transition: same statement for the wrapper's body. -/
-theorem wExpExternal_step_spec {x : Int} (hlo : -MAXINPUT ≤ x) (hhi : x < MAXINPUT)
-    {s0 s1 f0 f1 : Frame} {e0 e0' e1 e1' : EVM.State} {v0 v1 : List Value}
-    (hx0 : s0.locals.get? "x" = some (.int x)) (hc0 : s0.contract = wexpContract)
-    (hx1 : s1.locals.get? "x" = some (.int (x + 1))) (hc1 : s1.contract = wexpContract)
-    (h0 : ExecFuncBody wexpConfig s0 e0 wExpExternal.body (.returned f0 e0' (some v0)))
-    (h1 : ExecFuncBody wexpConfig s1 e1 wExpExternal.body (.returned f1 e1' (some v1))) :
-    ∃ a b : Int, v0 = [.int a] ∧ v1 = [.int b] ∧ a ≤ b := by
-  obtain ⟨_, _, r0⟩ := wExpExternal_result hlo (by omega) hx0 hc0 h0
-  obtain ⟨_, _, r1⟩ := wExpExternal_result (by omega) (by omega) hx1 hc1 h1
-  cases r0; cases r1
-  exact ⟨_, _, rfl, rfl, specWExp_step hlo hhi⟩
+/-- The same step on the external `wExp` transition body. -/
+theorem wExpExternal_step_spec {cfg : Config} {stele₁ stele₂ stele₁' stele₂' : Frame}
+    {evm evm₁' evm₂' : EVM.State} {x : Int} {v₁ v₂ : Value}
+    (hc₁ : stele₁.contract = wexpContract) (hx₁ : stele₁.locals.get? "x" = some (.int x))
+    (hc₂ : stele₂.contract = wexpContract) (hx₂ : stele₂.locals.get? "x" = some (.int (x + 1)))
+    (hlo : -MAXINPUT ≤ x) (hhi : x < MAXINPUT)
+    (h₁ : ExecFuncBody cfg stele₁ evm wExpExternal.body (.returned stele₁' evm₁' (some [v₁])))
+    (h₂ : ExecFuncBody cfg stele₂ evm wExpExternal.body (.returned stele₂' evm₂' (some [v₂]))) :
+    ∃ i j, v₁ = .int i ∧ v₂ = .int j ∧ i ≤ j := by
+  obtain ⟨_, _, h₁⟩ := wExpExternal_result hc₁ hx₁ hlo (Int.le_of_lt hhi) h₁
+  obtain ⟨_, _, h₂⟩ := wExpExternal_result hc₂ hx₂ (by omega) (by omega) h₂
+  cases h₁; cases h₂
+  exact ⟨specWExp x, specWExp (x + 1), rfl, rfl, specWExp_step hlo hhi⟩
 
 end WExp
